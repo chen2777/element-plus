@@ -46,13 +46,25 @@ You need to use an additional plugin to import components you used.
 
 First you need to install `unplugin-vue-components` and `unplugin-auto-import`.
 
-```shell
-npm install -D unplugin-vue-components unplugin-auto-import
+::: code-group
+
+```shell [npm]
+$ npm install -D unplugin-vue-components unplugin-auto-import
 ```
+
+```shell [yarn]
+$ yarn add -D unplugin-vue-components unplugin-auto-import
+```
+
+```shell [pnpm]
+$ pnpm install -D unplugin-vue-components unplugin-auto-import
+```
+
+:::
 
 Then add the code below into your `Vite` or `Webpack` config file.
 
-##### Vite
+::: code-group
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite'
@@ -74,8 +86,6 @@ export default defineConfig({
 })
 ```
 
-##### Webpack
-
 ```js [webpack.config.js]
 const AutoImport = require('unplugin-auto-import/webpack')
 const Components = require('unplugin-vue-components/webpack')
@@ -94,15 +104,29 @@ module.exports = {
 }
 ```
 
+:::
+
 For more bundlers ([Rollup](https://rollupjs.org/), [Vue CLI](https://cli.vuejs.org/)) and configs please reference [unplugin-vue-components](https://github.com/antfu/unplugin-vue-components#installation) and [unplugin-auto-import](https://github.com/antfu/unplugin-auto-import#install).
 
 #### Nuxt
 
 For Nuxt users, you only need to install `@element-plus/nuxt`.
 
-```shell
-npm install -D @element-plus/nuxt
+::: code-group
+
+```shell [npm]
+$ npm install -D @element-plus/nuxt
 ```
+
+```shell [yarn]
+$ yarn add -D @element-plus/nuxt
+```
+
+```shell [pnpm]
+$ pnpm install -D @element-plus/nuxt
+```
+
+:::
 
 Then add the code below into your config file.
 
@@ -127,11 +151,8 @@ And refer to the [docs](https://github.com/element-plus/unplugin-element-plus#re
   <el-button>I am ElButton</el-button>
 </template>
 
-<script>
+<script setup lang="ts">
 import { ElButton } from 'element-plus'
-export default {
-  components: { ElButton },
-}
 </script>
 ```
 
@@ -179,33 +200,19 @@ On-demand:
   </el-config-provider>
 </template>
 
-<script>
-import { defineComponent } from 'vue'
+<script setup lang="ts">
 import { ElConfigProvider } from 'element-plus'
 
-export default defineComponent({
-  components: {
-    ElConfigProvider,
-  },
-  setup() {
-    return {
-      zIndex: 3000,
-      size: 'small',
-    }
-  },
-})
+const zIndex = 3000
+const size = 'small'
 </script>
 ```
 
 ## Using Nuxt.js
 
-We can also use [Nuxt.js](https://nuxt.com):
-
-<div class="glitch-embed-wrap" style="height: 420px; width: 100%;">
-  <iframe src="https://glitch.com/edit/#!/element-plus-nuxt-starter?path=components%2FExamples.vue%3A1%3A0" alt="nuxt-element-plus on glitch" style="height: 100%; width: 100%; border: 0;"></iframe>
-</div>
+We can also use [Nuxt.js](https://nuxt.com). Please refer to [Element Plus Nuxt.js starter template](https://github.com/element-plus/element-plus-nuxt-starter) for more details.
 
 ## Let's Get Started
 
 You can bootstrap your project from now on. For each components usage, please
-refer to [the individual component documentation](https://element-plus.org/en-US/component/button.html).
+refer to [the individual component documentation](../component/button.md).

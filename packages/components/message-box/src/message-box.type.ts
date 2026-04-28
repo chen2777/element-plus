@@ -1,7 +1,12 @@
-import type { AppContext, CSSProperties, Component, VNode } from 'vue'
-import type { ComponentSize } from '@element-plus/constants'
+import { buttonTypes } from '@element-plus/components/button'
 
-type MessageType = '' | 'success' | 'warning' | 'info' | 'error'
+import type { AppContext, Component, VNode } from 'vue'
+import type { ComponentSize } from '@element-plus/constants'
+import type { InputType } from '@element-plus/components/input/src/input'
+import type { CSSProperties } from '@element-plus/utils'
+
+type MessageType = '' | 'primary' | 'success' | 'warning' | 'info' | 'error'
+type MessageBoxButtonType = (typeof buttonTypes)[number]
 
 export type Action = 'confirm' | 'close' | 'cancel'
 export type MessageBoxType = '' | 'prompt' | 'alert' | 'confirm'
@@ -14,6 +19,12 @@ export interface MessageBoxInputData {
 export type MessageBoxInputValidator =
   | ((value: string) => boolean | string)
   | undefined
+export type CloseFn = () => void
+export interface MessageBoxActionHandlers {
+  confirm: CloseFn
+  cancel: CloseFn
+  close: CloseFn
+}
 
 export declare interface MessageBoxState {
   autofocus: boolean
@@ -27,7 +38,7 @@ export declare interface MessageBoxState {
   showInput: boolean
   inputValue: string
   inputPlaceholder: string
-  inputType: string
+  inputType: InputType
   inputPattern: RegExp | null
   inputValidator: MessageBoxInputValidator
   inputErrorMessage: string
@@ -37,6 +48,8 @@ export declare interface MessageBoxState {
   dangerouslyUseHTMLString: boolean
   confirmButtonText: string
   cancelButtonText: string
+  confirmButtonType: MessageBoxButtonType
+  cancelButtonType: MessageBoxButtonType
   confirmButtonLoading: boolean
   cancelButtonLoading: boolean
   confirmButtonLoadingIcon: string | Component
@@ -84,6 +97,12 @@ export interface ElMessageBoxOptions {
   /** Custom inline style for MessageBox */
   customStyle?: CSSProperties
 
+  /** Whether a mask is displayed */
+  modal?: boolean
+
+  /** modal class name for MessageBox */
+  modalClass?: string
+
   /** MessageBox closing callback if you don't prefer Promise */
   callback?: Callback
 
@@ -92,6 +111,12 @@ export interface ElMessageBoxOptions {
 
   /** Text content of confirm button */
   confirmButtonText?: string
+
+  /** Type of cancel button */
+  cancelButtonType?: MessageBoxButtonType
+
+  /** Type of confirm button */
+  confirmButtonType?: MessageBoxButtonType
 
   /** Loading Icon content of cancel button */
   cancelButtonLoadingIcon?: string | Component
@@ -115,7 +140,7 @@ export interface ElMessageBoxOptions {
   overflow?: boolean
 
   /** Content of the MessageBox */
-  message?: string | VNode | (() => VNode)
+  message?: string | VNode | ((params: MessageBoxActionHandlers) => VNode)
 
   /** Title of the MessageBox */
   title?: string | ElMessageBoxOptions
@@ -174,8 +199,8 @@ export interface ElMessageBoxOptions {
   /** Regexp for the input */
   inputPattern?: RegExp
 
-  /** Input Type: text, textArea, password or number */
-  inputType?: string
+  /** type of input, see more in [MDN](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input#Form_%3Cinput%3E_types) */
+  inputType?: InputType
 
   /** Validation function for the input. Should returns a boolean or string. If a string is returned, it will be assigned to inputErrorMessage */
   inputValidator?: MessageBoxInputValidator
@@ -203,7 +228,7 @@ export type ElMessageBoxShortcutMethod = ((
   ) => Promise<MessageBoxData>)
 
 export interface IElMessageBox {
-  _context: AppContext | null
+  _context: AppContext | null;
 
   /** Show a message box */
   // (message: string, title?: string, type?: string): Promise<MessageBoxData>
@@ -224,5 +249,5 @@ export interface IElMessageBox {
   prompt: ElMessageBoxShortcutMethod
 
   /** Close current message box */
-  close(): void
+  close: CloseFn
 }

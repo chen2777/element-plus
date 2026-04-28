@@ -1,26 +1,22 @@
-export const rightRichTextSponsors = []
+export type Sponsor = {
+  url: string
+  name_cn?: string
+  name: string
+  slogan_cn?: string
+  slogan: string
+  img: string
+  isDark?: boolean
+  imgL?: string
+  slogan_index?: string
+  banner_img?: string
+  className?: string
+}
 
-export const rightBigLogoSponsors = [
-  {
-    name: 'CRMEB',
-    img: '/images/CRMEB.png',
-    imgL: '/images/CRMEB-l.png',
-    url: 'http://github.crmeb.net/u/Elementyouce',
-    slogan: 'High-quality open source mall system',
-    slogan_cn: '高品质开源商城系统 累计服务40W+开发者',
-    slogan_index: '高品质开源商城系统累计服务40W+开发者',
-  },
-]
+export const rightRichTextSponsors: Sponsor[] = []
 
-export const rightLogoSmallSponsors = [
-  {
-    name: 'BuildAdmin',
-    img: '/images/buildadmin.png',
-    imgL: '/images/buildadmin-l.png',
-    url: 'https://doc.buildadmin.com/?from=element-plus',
-    slogan: 'Vue3 open source admin system',
-    slogan_cn: 'Vue3企业级开源后台管理系统',
-  },
+export const rightBigLogoSponsors: Sponsor[] = []
+
+export const rightLogoSmallSponsors: Sponsor[] = [
   {
     name: 'bit',
     img: '/images/bit.svg',
@@ -31,15 +27,7 @@ export const rightLogoSmallSponsors = [
   },
 ]
 
-export const leftCustomImgSponsors = [
-  {
-    name: '美乐',
-    img: '/images/mele.png',
-    url: 'https://melecode.com/prom.html',
-    slogan: 'Enterprise-level low-code development platform',
-    slogan_cn: '企业级全栈低代码开发平台',
-    banner_img: '/images/mele-banner.png',
-  },
+export const leftCustomImgSponsors: Sponsor[] = [
   {
     name: 'JNPF',
     img: '/images/jnpf_index.png',
@@ -49,6 +37,14 @@ export const leftCustomImgSponsors = [
     className: 'jnpf',
     banner_img: '/images/jnpfsoft.png',
   },
+  {
+    name: 'CRMEB',
+    img: '/images/CRMEB.png',
+    url: 'http://github.crmeb.net/u/Elementyouce',
+    slogan: 'High-quality open source mall system',
+    slogan_cn: '高品质开源商城系统 累计服务40W+开发者',
+    banner_img: '/images/CRMEB-l.jpg',
+  },
 ]
 
 export const platinumSponsors = [
@@ -57,6 +53,6 @@ export const platinumSponsors = [
   ...rightRichTextSponsors,
 ]
 
-export const leftLogoSponsors = []
+export const leftLogoSponsors: Sponsor[] = []
 
 export const goldSponsors = [...rightLogoSmallSponsors, ...leftLogoSponsors]

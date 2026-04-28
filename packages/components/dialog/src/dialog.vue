@@ -1,19 +1,18 @@
 <template>
-  <el-teleport
+  <teleport
     :to="appendTo"
     :disabled="appendTo !== 'body' ? false : !appendToBody"
   >
-    <transition
-      name="dialog-fade"
-      @after-enter="afterEnter"
-      @after-leave="afterLeave"
-      @before-leave="beforeLeave"
-    >
+    <transition v-bind="transitionConfig">
       <el-overlay
         v-show="visible"
         custom-mask-event
         :mask="modal"
-        :overlay-class="modalClass"
+        :overlay-class="[
+          modalClass ?? '',
+          `${ns.namespace.value}-modal-dialog`,
+          ns.is('penetrable', penetrable),
+        ]"
         :z-index="zIndex"
       >
         <div
@@ -22,7 +21,10 @@
           :aria-label="title || undefined"
           :aria-labelledby="!title ? titleId : undefined"
           :aria-describedby="bodyId"
-          :class="`${ns.namespace.value}-overlay-dialog`"
+          :class="[
+            `${ns.namespace.value}-overlay-dialog`,
+            ns.is('closing', closing),
+          ]"
           :style="overlayDialogStyle"
           @click="overlayEvent.onClick"
           @mousedown="overlayEvent.onMousedown"
@@ -42,10 +44,10 @@
               ref="dialogContentRef"
               v-bind="$attrs"
               :center="center"
-              :align-center="alignCenter"
+              :align-center="_alignCenter"
               :close-icon="closeIcon"
-              :draggable="draggable"
-              :overflow="overflow"
+              :draggable="_draggable"
+              :overflow="_overflow"
               :fullscreen="fullscreen"
               :header-class="headerClass"
               :body-class="bodyClass"
@@ -54,6 +56,7 @@
               :title="title"
               :aria-level="headerAriaLevel"
               @close="handleClose"
+              @mousedown="bringToFront"
             >
               <template #header>
                 <slot
@@ -74,7 +77,7 @@
         </div>
       </el-overlay>
     </transition>
-  </el-teleport>
+  </teleport>
 </template>
 
 <script lang="ts" setup>
@@ -82,18 +85,19 @@ import { computed, provide, ref, useSlots } from 'vue'
 import { ElOverlay } from '@element-plus/components/overlay'
 import { useDeprecated, useNamespace, useSameTarget } from '@element-plus/hooks'
 import ElFocusTrap from '@element-plus/components/focus-trap'
-import ElTeleport from '@element-plus/components/teleport'
 import ElDialogContent from './dialog-content.vue'
 import { dialogInjectionKey } from './constants'
-import { dialogEmits, dialogProps } from './dialog'
+import { dialogEmits, dialogPropsDefaults } from './dialog'
 import { useDialog } from './use-dialog'
+
+import type { DialogProps } from './dialog'
 
 defineOptions({
   name: 'ElDialog',
   inheritAttrs: false,
 })
 
-const props = defineProps(dialogProps)
+const props = withDefaults(defineProps<DialogProps>(), dialogPropsDefaults)
 defineEmits(dialogEmits)
 const slots = useSlots()
 
@@ -120,16 +124,20 @@ const {
   style,
   overlayDialogStyle,
   rendered,
+  transitionConfig,
   zIndex,
-  afterEnter,
-  afterLeave,
-  beforeLeave,
+  _draggable,
+  _alignCenter,
+  _overflow,
+  penetrable,
   handleClose,
   onModalClick,
   onOpenAutoFocus,
   onCloseAutoFocus,
   onCloseRequested,
   onFocusoutPrevented,
+  bringToFront,
+  closing,
 } = useDialog(props, dialogRef)
 
 provide(dialogInjectionKey, {
@@ -143,8 +151,6 @@ provide(dialogInjectionKey, {
 
 const overlayEvent = useSameTarget(onModalClick)
 
-const draggable = computed(() => props.draggable && !props.fullscreen)
-
 const resetPosition = () => {
   dialogContentRef.value?.resetPosition()
 }
@@ -154,5 +160,6 @@ defineExpose({
   visible,
   dialogContentRef,
   resetPosition,
+  handleClose,
 })
 </script>

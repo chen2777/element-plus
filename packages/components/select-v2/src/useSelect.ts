@@ -4,24 +4,24 @@ import {
   onMounted,
   reactive,
   ref,
+  useSlots,
   watch,
   watchEffect,
 } from 'vue'
+import { findLastIndex, get, isEqual } from 'lodash-unified'
+import { useDebounceFn, useResizeObserver } from '@vueuse/core'
 import {
-  findLastIndex,
-  get,
-  isEqual,
-  debounce as lodashDebounce,
-} from 'lodash-unified'
-import { useResizeObserver } from '@vueuse/core'
-import {
+  NOOP,
   ValidateComponentsMap,
   debugWarn,
   escapeStringRegexp,
+  getEventCode,
   isArray,
+  isEmpty,
   isFunction,
   isNumber,
   isObject,
+  isUndefined,
 } from '@element-plus/utils'
 import {
   useComposition,
@@ -33,109 +33,29 @@ import {
 import {
   CHANGE_EVENT,
   EVENT_CODE,
+  MINIMUM_INPUT_WIDTH,
   UPDATE_MODEL_EVENT,
 } from '@element-plus/constants'
 import {
+  useFormDisabled,
   useFormItem,
   useFormItemInputId,
   useFormSize,
 } from '@element-plus/components/form'
-
-import { ArrowDown } from '@element-plus/icons-vue'
 import { useAllowCreate } from './useAllowCreate'
 import { useProps } from './useProps'
 
 import type { Option, OptionType, SelectStates } from './select.types'
-import type { ISelectV2Props } from './token'
-import type { SelectEmitFn } from './defaults'
+import type { SelectV2Props } from './token'
+import type { SelectV2EmitFn } from './defaults'
+import type { ScrollbarDirection } from '@element-plus/components/scrollbar'
 import type { TooltipInstance } from '@element-plus/components/tooltip'
 import type { SelectDropdownInstance } from './select-dropdown'
-import type { Component, ComputedRef, Ref, WritableComputedRef } from 'vue'
 
-type useSelectReturnType = (
-  props: ISelectV2Props,
-  emit: SelectEmitFn
-) => {
-  inputId: Ref<string | undefined>
-  collapseTagSize: ComputedRef<'default' | 'small'>
-  currentPlaceholder: ComputedRef<string>
-  expanded: Ref<boolean>
-  emptyText: ComputedRef<string | false | null>
-  popupHeight: ComputedRef<number>
-  debounce: ComputedRef<0 | 300>
-  allOptions: ComputedRef<OptionType[]>
-  filteredOptions: Ref<OptionType[]>
-  iconComponent: ComputedRef<any>
-  iconReverse: ComputedRef<any>
-  tagStyle: ComputedRef<{ maxWidth: string }>
-  collapseTagStyle: ComputedRef<{ maxWidth: string }>
-  popperSize: Ref<number>
-  dropdownMenuVisible: WritableComputedRef<boolean>
-  hasModelValue: ComputedRef<boolean>
-  shouldShowPlaceholder: ComputedRef<boolean>
-  selectDisabled: ComputedRef<boolean | undefined>
-  selectSize: ComputedRef<string>
-  needStatusIcon: ComputedRef<boolean>
-  showClearBtn: ComputedRef<boolean>
-  states: SelectStates
-  isFocused: Ref<boolean>
-  nsSelect: ReturnType<typeof useNamespace>
-  nsInput: ReturnType<typeof useNamespace>
-  inputRef: Ref<HTMLElement | undefined>
-  menuRef: Ref<SelectDropdownInstance | undefined>
-  tagMenuRef: Ref<HTMLElement | undefined>
-  tooltipRef: Ref<TooltipInstance | undefined>
-  tagTooltipRef: Ref<TooltipInstance | undefined>
-  selectRef: Ref<HTMLElement | undefined>
-  wrapperRef: Ref<HTMLElement | undefined>
-  selectionRef: Ref<HTMLElement | undefined>
-  prefixRef: Ref<HTMLElement | undefined>
-  suffixRef: Ref<HTMLElement | undefined>
-  collapseItemRef: Ref<HTMLElement | undefined>
-  popperRef: ComputedRef<HTMLElement | undefined>
-  validateState: ComputedRef<string>
-  validateIcon: ComputedRef<Component | undefined>
-  showTagList: ComputedRef<Option[]>
-  collapseTagList: ComputedRef<Option[]>
-  debouncedOnInputChange: () => void
-  deleteTag: (event: MouseEvent, option: Option) => void
-  getLabel: (option: Option) => string
-  getValue: (option: Option) => unknown
-  getDisabled: (option: Option) => boolean
-  getValueKey: (item: unknown) => any
-  handleClear: () => void
-  handleClickOutside: (event: Event) => void
-  handleDel: (e: KeyboardEvent) => void
-  handleEsc: () => void
-  focus: () => void
-  blur: () => void
-  handleMenuEnter: () => void
-  handleResize: () => void
-  resetSelectionWidth: () => void
-  updateTooltip: () => void
-  updateTagTooltip: () => void
-  updateOptions: () => void
-  toggleMenu: () => void
-  scrollTo: (index: number) => void
-  onInput: (event: Event) => void
-  onKeyboardNavigate: (
-    direction: 'forward' | 'backward',
-    hoveringIndex?: number
-  ) => void
-  onKeyboardSelect: () => void
-  onSelect: (option: Option) => void
-  onHover: (idx?: number) => void
-  handleCompositionStart: (event: CompositionEvent) => void
-  handleCompositionEnd: (event: CompositionEvent) => void
-  handleCompositionUpdate: (event: CompositionEvent) => void
-}
-
-const useSelect: useSelectReturnType = (
-  props: ISelectV2Props,
-  emit: SelectEmitFn
-) => {
+const useSelect = (props: SelectV2Props, emit: SelectV2EmitFn) => {
   // inject
   const { t } = useLocale()
+  const slots = useSlots()
   const nsSelect = useNamespace('select')
   const nsInput = useNamespace('input')
   const { form: elForm, formItem: elFormItem } = useFormItem()
@@ -163,6 +83,7 @@ const useSelect: useSelectReturnType = (
 
   // data refs
   const popperSize = ref(-1)
+  const debouncing = ref(false)
 
   // DOM & Component refs
   const selectRef = ref<HTMLElement>()
@@ -185,10 +106,10 @@ const useSelect: useSelectReturnType = (
     afterComposition: (e) => onInput(e),
   })
 
+  const selectDisabled = useFormDisabled()
+
   const { wrapperRef, isFocused, handleBlur } = useFocusController(inputRef, {
-    beforeFocus() {
-      return selectDisabled.value
-    },
+    disabled: selectDisabled,
     afterFocus() {
       if (props.automaticDropdown && !expanded.value) {
         expanded.value = true
@@ -204,6 +125,9 @@ const useSelect: useSelectReturnType = (
     afterBlur() {
       expanded.value = false
       states.menuVisibleOnFocus = false
+      if (props.validateEvent) {
+        elFormItem?.validate?.('blur').catch(NOOP)
+      }
     },
   })
 
@@ -217,8 +141,6 @@ const useSelect: useSelectReturnType = (
   const filteredOptions = ref<OptionType[]>([])
   // the controller of the expanded popup
   const expanded = ref(false)
-
-  const selectDisabled = computed(() => props.disabled || elForm?.disabled)
 
   const needStatusIcon = computed(() => elForm?.statusIcon ?? false)
 
@@ -237,13 +159,15 @@ const useSelect: useSelectReturnType = (
     return (
       props.clearable &&
       !selectDisabled.value &&
-      states.inputHovering &&
-      hasModelValue.value
+      hasModelValue.value &&
+      (isFocused.value || states.inputHovering)
     )
   })
 
   const iconComponent = computed(() =>
-    props.remote && props.filterable ? '' : ArrowDown
+    props.remote && props.filterable && !props.remoteShowSuffix
+      ? ''
+      : props.suffixIcon
   )
 
   const iconReverse = computed(
@@ -259,14 +183,17 @@ const useSelect: useSelectReturnType = (
     return ValidateComponentsMap[validateState.value]
   })
 
-  const debounce = computed(() => (props.remote ? 300 : 0))
+  const debounce = computed(() => (props.remote ? props.debounce : 0))
+
+  const isRemoteSearchEmpty = computed(
+    () => props.remote && !states.inputValue && !hasOptions.value
+  )
 
   // filteredOptions includes flatten the data into one dimensional array.
   const emptyText = computed(() => {
     if (props.loading) {
       return props.loadingText || t('el.select.loading')
     } else {
-      if (props.remote && !states.inputValue && !hasOptions.value) return false
       if (
         props.filterable &&
         states.inputValue &&
@@ -282,14 +209,18 @@ const useSelect: useSelectReturnType = (
     return null
   })
 
+  const isFilterMethodValid = computed(
+    () => props.filterable && isFunction(props.filterMethod)
+  )
+  const isRemoteMethodValid = computed(
+    () => props.filterable && props.remote && isFunction(props.remoteMethod)
+  )
+
   const filterOptions = (query: string) => {
     const regexp = new RegExp(escapeStringRegexp(query), 'i')
-    const isFilterMethodValid =
-      props.filterable && isFunction(props.filterMethod)
-    const isRemoteMethodValid =
-      props.filterable && props.remote && isFunction(props.remoteMethod)
+
     const isValidOption = (o: Option): boolean => {
-      if (isFilterMethodValid || isRemoteMethodValid) return true
+      if (isFilterMethodValid.value || isRemoteMethodValid.value) return true
       // when query was given, we should test on the label see whether the label contains the given query
       return query ? regexp.test(getLabel(o) || '') : true
     }
@@ -381,7 +312,10 @@ const useSelect: useSelectReturnType = (
     const padding =
       Number.parseFloat(style.paddingLeft) +
       Number.parseFloat(style.paddingRight)
-    ctx.font = style.font
+    ctx.font = `bold ${style.font.replace(
+      new RegExp(`\\b${style.fontWeight}\\b`),
+      ''
+    )}`
     const maxWidth = filteredOptions.value.reduce((max, option) => {
       const metrics = ctx.measureText(getLabel(option))
       return Math.max(metrics.width, max)
@@ -398,10 +332,14 @@ const useSelect: useSelectReturnType = (
   // computed style
   const tagStyle = computed(() => {
     const gapWidth = getGapWidth()
+    const inputSlotWidth = props.filterable ? gapWidth + MINIMUM_INPUT_WIDTH : 0
     const maxWidth =
       collapseItemRef.value && props.maxCollapseTags === 1
-        ? states.selectionWidth - states.collapseItemWidth - gapWidth
-        : states.selectionWidth
+        ? states.selectionWidth -
+          states.collapseItemWidth -
+          gapWidth -
+          inputSlotWidth
+        : states.selectionWidth - inputSlotWidth
     return { maxWidth: `${maxWidth}px` }
   })
 
@@ -434,7 +372,7 @@ const useSelect: useSelectReturnType = (
     if (props.multiple) {
       const len = (props.modelValue as []).length
       if (
-        (props.modelValue as Array<any>).length > 0 &&
+        len > 0 &&
         filteredOptionsValueMap.value.has(props.modelValue[len - 1])
       ) {
         const { index } = filteredOptionsValueMap.value.get(
@@ -456,7 +394,15 @@ const useSelect: useSelectReturnType = (
 
   const dropdownMenuVisible = computed({
     get() {
-      return expanded.value && emptyText.value !== false
+      return (
+        expanded.value &&
+        (props.loading ||
+          !isRemoteSearchEmpty.value ||
+          (props.remote && !!slots.empty)) &&
+        (!debouncing.value ||
+          !isEmpty(states.previousQuery) ||
+          hasOptions.value)
+      )
     },
     set(val: boolean) {
       expanded.value = val
@@ -490,8 +436,15 @@ const useSelect: useSelectReturnType = (
   } = useAllowCreate(props, states)
 
   // methods
-  const toggleMenu = () => {
-    if (selectDisabled.value) return
+  const toggleMenu = (event?: Event) => {
+    if (
+      selectDisabled.value ||
+      (props.filterable &&
+        expanded.value &&
+        event &&
+        !suffixRef.value?.contains(event.target as Node))
+    )
+      return
 
     if (states.menuVisibleOnFocus) {
       // controlled by automaticDropdown
@@ -506,10 +459,15 @@ const useSelect: useSelectReturnType = (
       expanded.value = true
     }
     createNewOption(states.inputValue)
-    handleQueryChange(states.inputValue)
+    nextTick(() => {
+      handleQueryChange(states.inputValue)
+    })
   }
 
-  const debouncedOnInputChange = lodashDebounce(onInputChange, debounce.value)
+  const debouncedOnInputChange = useDebounceFn(() => {
+    onInputChange()
+    debouncing.value = false
+  }, debounce)
 
   const handleQueryChange = (val: string) => {
     if (states.previousQuery === val || isComposing.value) {
@@ -568,6 +526,21 @@ const useSelect: useSelectReturnType = (
     emit(UPDATE_MODEL_EVENT, val)
     emitChange(val)
     states.previousValue = props.multiple ? String(val) : val
+
+    nextTick(() => {
+      if (props.multiple && isArray(props.modelValue)) {
+        const cachedOptions = states.cachedOptions.slice()
+        const selectedOptions = props.modelValue.map((value) =>
+          getOption(value, cachedOptions)
+        )
+
+        if (!isEqual(states.cachedOptions, selectedOptions)) {
+          states.cachedOptions = selectedOptions
+        }
+      } else {
+        initStates(true)
+      }
+    })
   }
 
   const getValueIndex = (arr: unknown[] = [], value: unknown) => {
@@ -594,8 +567,14 @@ const useSelect: useSelectReturnType = (
     calculatePopperSize()
   }
 
+  const onEndReached = (direction: ScrollbarDirection) => {
+    emit('end-reached', direction)
+  }
+
   const resetSelectionWidth = () => {
-    states.selectionWidth = selectionRef.value!.getBoundingClientRect().width
+    states.selectionWidth = Number.parseFloat(
+      window.getComputedStyle(selectionRef.value!).width
+    )
   }
 
   const resetCollapseItemWidth = () => {
@@ -612,10 +591,12 @@ const useSelect: useSelectReturnType = (
   }
 
   const onSelect = (option: Option) => {
+    const optionValue = getValue(option)
+
     if (props.multiple) {
       let selectedOptions = (props.modelValue as any[]).slice()
 
-      const index = getValueIndex(selectedOptions, getValue(option))
+      const index = getValueIndex(selectedOptions, optionValue)
       if (index > -1) {
         selectedOptions = [
           ...selectedOptions.slice(0, index),
@@ -627,7 +608,7 @@ const useSelect: useSelectReturnType = (
         props.multipleLimit <= 0 ||
         selectedOptions.length < props.multipleLimit
       ) {
-        selectedOptions = [...selectedOptions, getValue(option)]
+        selectedOptions = [...selectedOptions, optionValue]
         states.cachedOptions.push(option)
         selectNewOption(option)
       }
@@ -635,12 +616,12 @@ const useSelect: useSelectReturnType = (
       if (option.created) {
         handleQueryChange('')
       }
-      if (props.filterable && !props.reserveKeyword) {
+      if (props.filterable && (option.created || !props.reserveKeyword)) {
         states.inputValue = ''
       }
     } else {
       states.selectedLabel = getLabel(option)
-      update(getValue(option))
+      !isEqual(props.modelValue, optionValue) && update(optionValue)
       expanded.value = false
       selectNewOption(option)
       if (!option.created) {
@@ -701,8 +682,9 @@ const useSelect: useSelectReturnType = (
     )
 
   const handleDel = (e: KeyboardEvent) => {
+    const code = getEventCode(e)
     if (!props.multiple) return
-    if (e.code === EVENT_CODE.delete) return
+    if (code === EVENT_CODE.delete) return
     if (states.inputValue.length === 0) {
       e.preventDefault()
       const selected = (props.modelValue as Array<any>).slice()
@@ -726,11 +708,8 @@ const useSelect: useSelectReturnType = (
       emptyValue = valueOnClear.value
     }
 
-    if (props.multiple) {
-      states.cachedOptions = []
-    } else {
-      states.selectedLabel = ''
-    }
+    states.selectedLabel = ''
+
     expanded.value = false
     update(emptyValue)
     emit('clear')
@@ -755,7 +734,7 @@ const useSelect: useSelectReturnType = (
     if (!expanded.value) {
       return toggleMenu()
     }
-    if (hoveringIndex === undefined) {
+    if (isUndefined(hoveringIndex)) {
       hoveringIndex = states.hoveringIndex
     }
     let newIndex = -1
@@ -800,20 +779,25 @@ const useSelect: useSelectReturnType = (
   const updateHoveringIndex = () => {
     if (!props.multiple) {
       states.hoveringIndex = filteredOptions.value.findIndex((item) => {
-        return getValueKey(item) === getValueKey(props.modelValue)
+        return getValueKey(getValue(item)) === getValueKey(props.modelValue)
       })
     } else {
-      states.hoveringIndex = filteredOptions.value.findIndex((item) =>
-        props.modelValue.some(
-          (modelValue: unknown) => getValueKey(modelValue) === getValueKey(item)
+      const length = props.modelValue.length
+      if (length > 0) {
+        const lastValue = props.modelValue[length - 1]
+        states.hoveringIndex = filteredOptions.value.findIndex(
+          (item) => getValueKey(lastValue) === getValueKey(getValue(item))
         )
-      )
+      } else {
+        states.hoveringIndex = -1
+      }
     }
   }
 
   const onInput = (event: Event) => {
     states.inputValue = (event.target as HTMLInputElement).value
     if (props.remote) {
+      debouncing.value = true
       debouncedOnInputChange()
     } else {
       return onInputChange()
@@ -824,7 +808,7 @@ const useSelect: useSelectReturnType = (
     expanded.value = false
 
     if (isFocused.value) {
-      const _event = new FocusEvent('focus', event)
+      const _event = new FocusEvent('blur', event)
       handleBlur(_event)
     }
   }
@@ -833,7 +817,7 @@ const useSelect: useSelectReturnType = (
     states.isBeforeHide = false
     return nextTick(() => {
       if (~indexRef.value) {
-        scrollToItem(states.hoveringIndex)
+        scrollToItem(indexRef.value)
       }
     })
   }
@@ -865,6 +849,9 @@ const useSelect: useSelectReturnType = (
       [aliasProps.value.label]: value,
     }
   }
+
+  const getIndex = (option: Option) =>
+    allOptionsValueMap.value.get(getValue(option))?.index ?? -1
 
   const initStates = (needUpdateSelectedLabel = false) => {
     if (props.multiple) {
@@ -926,9 +913,9 @@ const useSelect: useSelectReturnType = (
       states.inputValue = ''
       states.previousQuery = null
       states.isBeforeHide = true
+      states.menuVisibleOnFocus = false
       createNewOption('')
     }
-    emit('visible-change', val)
   })
 
   watch(
@@ -945,7 +932,7 @@ const useSelect: useSelectReturnType = (
         initStates(true)
       }
       if (!isEqual(val, oldVal) && props.validateEvent) {
-        elFormItem?.validate?.('change').catch((err) => debugWarn(err))
+        elFormItem?.validate?.('change').catch(NOOP)
       }
     },
     {
@@ -1010,10 +997,24 @@ const useSelect: useSelectReturnType = (
   })
   useResizeObserver(selectRef, handleResize)
   useResizeObserver(selectionRef, resetSelectionWidth)
-  useResizeObserver(menuRef, updateTooltip)
   useResizeObserver(wrapperRef, updateTooltip)
   useResizeObserver(tagMenuRef, updateTagTooltip)
   useResizeObserver(collapseItemRef, resetCollapseItemWidth)
+
+  // #21498
+  let stop: (() => void) | undefined
+  watch(
+    () => dropdownMenuVisible.value,
+    (newVal) => {
+      if (newVal) {
+        stop = useResizeObserver(menuRef, updateTooltip).stop
+      } else {
+        stop?.()
+        stop = undefined
+      }
+      emit('visible-change', newVal)
+    }
+  )
 
   return {
     // data exports
@@ -1025,6 +1026,7 @@ const useSelect: useSelectReturnType = (
     popupHeight,
     debounce,
     allOptions,
+    allOptionsValueMap,
     filteredOptions,
     iconComponent,
     iconReverse,
@@ -1070,6 +1072,7 @@ const useSelect: useSelectReturnType = (
     getValue,
     getDisabled,
     getValueKey,
+    getIndex,
     handleClear,
     handleClickOutside,
     handleDel,
@@ -1087,6 +1090,7 @@ const useSelect: useSelectReturnType = (
     onInput,
     onKeyboardNavigate,
     onKeyboardSelect,
+    onEndReached,
     onSelect,
     onHover: onHoverOption,
     handleCompositionStart,
